@@ -1,0 +1,17 @@
+# Core dependencies for CFADB
+# Python 3.10 or later is recommended.
+
+numpy>=1.26,<3.0
+pandas>=2.1,<3.0
+h5py>=3.10,<4.0
+scipy>=1.11,<2.0
+matplotlib>=3.8,<4.0
+seaborn>=0.13,<1.0
+torch>=2.1,<3.0
+scikit-learn>=1.3,<2.0
+astropy>=6.0,<8.0
+ipython>=8.18,<10.0
+ipykernel>=6.29,<7.0
+ipywidgets>=8.1,<9.0
+notebook>=7.0,<8.0
+voila>=0.5,<1.0
