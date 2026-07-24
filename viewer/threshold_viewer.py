@@ -1874,9 +1874,18 @@ def launch_threshold_viewer(
     )
     trace_btn = widgets.Button(description="Update trace")
     change_btn = widgets.Button(description="Update changes")
-    prepare_sim_btn = widgets.Button(description="Prepare similarity download")
-    prepare_change_btn = widgets.Button(description="Prepare change download")
-    prepare_pdf_btn = widgets.Button(description="Prepare PDF")
+    prepare_sim_btn = widgets.Button(
+        description="Prepare similarity download",
+        layout=widgets.Layout(width="210px"),
+    )
+    prepare_change_btn = widgets.Button(
+        description="Prepare change download",
+        layout=widgets.Layout(width="190px"),
+    )
+    prepare_pdf_btn = widgets.Button(
+        description="Prepare PDF",
+        layout=widgets.Layout(width="110px"),
+    )
 
     map_download_html = widgets.HTML()
     sim_download_html = widgets.HTML()

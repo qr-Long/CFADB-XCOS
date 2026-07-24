@@ -1,40 +1,60 @@
-# CFADB: Automated Cross-database Mapping of Atomic Energy-Level Data
+# CFADB-XCOS: Automated Cross-database Mapping of Atomic Energy-Level Data
 
-CFADB is the research software and standardized atomic-data archive accompanying the paper **“Automated Cross-database Mapping of Atomic Energy-Level Data for Astrophysical Plasma Models.”** It identifies corresponding atomic energy levels across AtomDB v3.1.3, CHIANTI v11.0.2, and SPEX v3.08.01 by combining electronic-configuration similarity, term quantum numbers and parity, and energy similarity, followed by threshold-constrained Hungarian matching.
+CFADB-XCOS is the research software and standardized atomic-data archive accompanying the paper **“Automated Cross-database Mapping of Atomic Energy-Level Data for Astrophysical Plasma Models.”** It identifies corresponding atomic energy levels across AtomDB v3.1.3, CHIANTI v11.0.2, and SPEX v3.08.01 using a combined similarity score, referred to here as XCOS, based on electronic configuration, term quantum numbers and parity, and energy information, followed by threshold-constrained Hungarian matching.
 
-> **Start here.** Run the interactive Viewer from the repository root. The browser interface lets users select the sequence, ion, database pair, and threshold grid without editing notebook code:
+
+> **Start here.** Open the latest hosted Viewer through [Binder/Voilà](https://mybinder.org/v2/gh/qr-Long/CFADB-XCOS/main?urlpath=voila%2Frender%2Fviewer%2Fthr_viewer.ipynb), or run it locally from the repository root:
 >
 > ```bash
 > voila ./viewer/thr_viewer.ipynb --show_tracebacks=True
 > ```
 >
-> The same notebook is ready to serve as the target of a Binder/Voilà launch URL. Add a real release-specific link only after the public GitHub repository and tag have been configured and the hosted workflow has been tested; no placeholder URL is included in this archive.
+> The browser interface lets users select the sequence, ion, database pair, and threshold grid without editing notebook code. The hosted link follows the current GitHub `main` branch; use the archived files and the local command above when reproducing a specific Zenodo release.
 
 ## Contents
 
-1. [Overview](#1-overview)
-2. [Quick Start](#2-quick-start)
-3. [Atomic Structure Data](#3-atomic-structure-data)
-4. [Interactive Matching Viewer](#4-interactive-matching-viewer)
-5. [Configuration Model (`cfg`)](#5-configuration-model-cfg)
-6. [Similarity Computation (`cos`)](#6-similarity-computation-cos)
-7. [Threshold-constrained Matching and Validation (`thr_hung`)](#7-threshold-constrained-matching-and-validation-thr_hung)
-8. [Supporting Packages](#8-supporting-packages)
-9. [Data Collection and Cleaning](#9-data-collection-and-cleaning)
-10. [Figure Reproduction and Main Outputs](#10-figure-reproduction-and-main-outputs)
-11. [Software Requirements and Reproducibility Notes](#11-software-requirements-and-reproducibility-notes)
-12. [Data Sources and Contact](#12-data-sources-and-contact)
+- [CFADB-XCOS: Automated Cross-database Mapping of Atomic Energy-Level Data](#cfadb-xcos-automated-cross-database-mapping-of-atomic-energy-level-data)
+  - [Contents](#contents)
+  - [Repository tree](#repository-tree)
+  - [1. Overview](#1-overview)
+  - [2. Quick Start](#2-quick-start)
+    - [2.1 Install the dependencies and run from the repository root](#21-install-the-dependencies-and-run-from-the-repository-root)
+    - [2.2 Select the Viewer parameters](#22-select-the-viewer-parameters)
+    - [2.3 Main interface functions](#23-main-interface-functions)
+  - [3. Atomic Structure Data](#3-atomic-structure-data)
+    - [3.1 Sequence coverage](#31-sequence-coverage)
+    - [3.2 Ion-file naming convention](#32-ion-file-naming-convention)
+    - [3.3 HDF5 datasets and level-table columns](#33-hdf5-datasets-and-level-table-columns)
+  - [4. Interactive Matching Viewer](#4-interactive-matching-viewer)
+  - [5. Configuration Model (`cfg`)](#5-configuration-model-cfg)
+    - [`cfg_train_data.py`](#cfg_train_datapy)
+    - [`cfg_ts.py`](#cfg_tspy)
+    - [Other files in `cfg/`](#other-files-in-cfg)
+  - [6. Similarity Computation (`cos`)](#6-similarity-computation-cos)
+  - [7. Threshold-constrained Matching and Validation (`thr_hung`)](#7-threshold-constrained-matching-and-validation-thr_hung)
+  - [8. Supporting Packages](#8-supporting-packages)
+  - [9. Data Collection and Cleaning](#9-data-collection-and-cleaning)
+    - [Data collection](#data-collection)
+    - [Data cleaning](#data-cleaning)
+  - [10. Figure Reproduction and Main Outputs](#10-figure-reproduction-and-main-outputs)
+  - [11. Software Requirements and Reproducibility Notes](#11-software-requirements-and-reproducibility-notes)
+    - [Main dependencies](#main-dependencies)
+    - [Reproducibility notes](#reproducibility-notes)
+  - [12. Data Sources, Rights, and Contact](#12-data-sources-rights-and-contact)
+    - [Repository rights](#repository-rights)
+    - [Third-party atomic data](#third-party-atomic-data)
+    - [Derived dataset names](#derived-dataset-names)
+    - [Contact](#contact)
 
 ## Repository tree
 
 The repository is organized by scientific function rather than by a single execution order. Users who only wish to inspect the matching results generally need `clean_data/`, `map_data/cfg_ts/`, `viewer/`, `cos/`, and `thr_hung/`. Generated results are stored separately from the source code, archived atomic data, and trained configuration models. Package initializer files and generated cache files are omitted below for clarity.
 
 ```text
-cfadb/
-├── README.md                              # Project documentation
+CFADB-XCOS/
+├── README.md                              # English project documentation
+├── README_zh.md                           # Chinese translation
 ├── requirements.txt                      # Python dependencies
-├── LICENSE                               # License for original CFADB code and documentation
-├── THIRD_PARTY_DATA.md                    # Sources and rights notice for external atomic data
 ├── clean_data/                            # Standardized HDF5 atomic-data files
 │   ├── 010101.h5                          # First H-like file: H-like hydrogen ion
 │   ├── ...                                # Other H-like ions
@@ -131,7 +151,7 @@ The paper applies this workflow to H-like, He-like, Li-like, Be-like, and Ne-lik
 Enter the extracted repository directory, create a virtual environment, and install the archived dependency specification:
 
 ```bash
-cd cfadb
+cd CFADB-XCOS
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -155,7 +175,7 @@ The Viewer opens with browser controls rather than an editable parameter cell:
 
 The principal publication settings remain fixed internally as `EDGE_ABLATION="xcos"`, `XCOS_KEEP="cfg,phys,energy"`, and `MODEL_PATH=None`. The default XCOS weights are 0.47 for configuration, 0.25 for term quantum numbers and parity, and 0.28 for energy.
 
-Only databases with a `lev_<database>` dataset are listed. A missing `tran_<database>` dataset does not prevent level matching.
+Only databases with a `lev_<database>` dataset are listed.
 
 ### 2.3 Main interface functions
 
@@ -378,17 +398,42 @@ PyTorch installations with a specific CUDA build may be installed separately bef
 - Retraining can produce small differences across hardware and library builds. Use the archived model files when reproducing the reported similarity results.
 - Complete external source-database installations are required only when rerunning the data-collection stage.
 
-## 12. Data Sources and Contact
+## 12. Data Sources, Rights, and Contact
 
-### Primary atomic-data sources
+### Repository rights
 
-- **AtomDB v3.1.3 / APED:** <https://www.atomdb.org/>
+CFADB-XCOS is made publicly available to support scientific review, reproducibility, and use of the accompanying interactive Viewer. No separate open-source license is provided for the original CFADB-XCOS source code and documentation. Copyright in these materials is retained by the authors unless otherwise stated.
+
+Public availability on GitHub or Zenodo does not by itself grant permission to redistribute, modify, or incorporate substantial portions of the original CFADB-XCOS code or documentation into another project. Requests for such reuse should be directed to the authors. Access to and use of the repository are also subject to the applicable terms of the hosting platform.
+
+### Third-party atomic data
+
+The standardized HDF5 files under `clean_data/` contain atomic energy-level and transition data derived from:
+
+- **AtomDB/APED v3.1.3:** <https://www.atomdb.org/>
 - **CHIANTI v11.0.2:** <https://www.chiantidatabase.org/chianti_download.html>
 - **SPEX/SPEXACT v3.08.01:** <https://zenodo.org/records/12771915>
 - **SPEX/SPEXACT v3.08.03:** supplementary standardized data retained in the archive
 
-Relevant database papers are listed in the accompanying article.
+The source data were converted into the common CFADB-XCOS HDF5 schema for cross-database scientific comparison. This standardization does not transfer or alter ownership, copyright, database rights, license conditions, or attribution requirements associated with the underlying atomic data.
+
+Rights in the underlying data remain with the respective database developers, institutions, and original data providers. This repository does not grant additional rights to third-party atomic data. Users remain responsible for complying with the applicable terms and attribution requirements of the original providers.
+
+CHIANTI users should provide the acknowledgements and citations requested by the CHIANTI team. The SPEX team has confirmed permission for the inclusion of SPEX 3.08-derived data in this research archive; users should cite the corresponding SPEX Zenodo repository and relevant SPEX publications. Users of AtomDB-derived data should cite the relevant AtomDB/APED publications and identify the database version used.
+
+The accompanying article contains the principal scientific references, database descriptions, and acknowledgements for AtomDB, CHIANTI, and SPEX.
+
+### Derived dataset names
+
+The standardized datasets use the following names:
+
+- `lev_atomdb313` and `tran_atomdb313`
+- `lev_chianti1102` and `tran_chianti1102`
+- `lev_spex30801` and `tran_spex30801`
+- `lev_spex30803` and `tran_spex30803`
+
+Some ion files do not contain every dataset because database coverage differs by ion.
 
 ### Contact
 
-For scientific questions about the archive, contact **Qirui Long** at `longqr24@mails.tsinghua.edu.cn` or consult the corresponding-author information in the paper.
+For scientific questions, reuse requests, or questions concerning the archived data, contact **Qirui Long** at `longqr24@mails.tsinghua.edu.cn` or consult the corresponding-author information in the paper.
