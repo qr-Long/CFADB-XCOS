@@ -33,7 +33,7 @@ def cdb_file_todf(filepath, columns, lev_trantype):
             (47, 52),
             (52, 57),
             (57, 72),
-            (72, 85),
+            (72, 87),  # Read the full 15-character theoretical-energy field.
         ]
         df = pd.read_fwf(StringIO(data_text), colspecs=colspecs, header=None)
         for col in df.select_dtypes(include='object').columns:

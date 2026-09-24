@@ -106,20 +106,17 @@ def _format_threshold_ranges_from_mask(thresholds: np.ndarray, mask: np.ndarray)
 
 def _available_dbs_in_h5(h5_path: Path, target_dbs: Sequence[str]) -> List[str]:
     lev_suffixes = set()
-    tran_suffixes = set()
     with h5py.File(h5_path, "r") as f:
         def _visit(name: str, obj: Any) -> None:
             if not isinstance(obj, h5py.Dataset):
                 return
             leaf = name.split("/")[-1]
-            if leaf.startswith("lev_"):
+            if leaf.startswith("lev_") and not leaf.endswith("_delete"):
                 lev_suffixes.add(leaf.split("lev_", 1)[1])
-            elif leaf.startswith("tran_"):
-                tran_suffixes.add(leaf.split("tran_", 1)[1])
 
         f.visititems(_visit)
 
-    available = [db for db in target_dbs if db in lev_suffixes and db in tran_suffixes]
+    available = [db for db in target_dbs if db in lev_suffixes]
     return available
 
 
@@ -376,8 +373,9 @@ def _scan_one_pair(
         sim, thresholds, hungarian_module, rules
     )
 
-    # A threshold succeeds only when the selected count equals the theoretical overlap and every selected pair passes the rules.
-    success_mask = (matches == theoretical) & (mismatches == 0)
+    # Success requires a nonempty theoretical overlap, complete recovery,
+    # and no rule violations; an empty match is not a successful recovery.
+    success_mask = (theoretical > 0) & (matches == theoretical) & (mismatches == 0)
     success_thresholds = thresholds[success_mask].tolist()
     success_threshold_ranges = _format_threshold_ranges_from_mask(thresholds, success_mask)
     status = "success" if len(success_thresholds) > 0 else "fail"

@@ -1,11 +1,195 @@
 """
-Provide shared utilities for cleaning atomic transition tables and deriving
-level parity from electron-configuration strings.
+Provide reversible level-only cleaning and configuration/parity utilities.
+Legacy transition helpers remain available but are not called by XCOS cleaners.
 """
 
 import pandas as pd
 import numpy as np
 import re
+from pathlib import Path
+
+import h5py
+
+
+def build_level_tables(original, keep_mask=None):
+    """Partition original records without changing any existing field except cfg.
+
+    Deleted rows retain their source positions; both outputs keep original_cfg
+    last. Source dtypes (including string widths) are retained without a
+    DataFrame round trip. An existing source pi is preserved, not overwritten.
+    """
+    names = original.dtype.names
+    if names is None or "cfg" not in names:
+        raise ValueError("Expected a structured level table containing cfg")
+    if {"original_cfg", "original_row"}.intersection(names):
+        raise ValueError("Use atomic_data as input, not an already cleaned table")
+    if original.dtype.hasobject:
+        raise ValueError("Variable-length/object fields require explicit archival support")
+    if keep_mask is None:
+        keep_mask = np.ones(len(original), dtype=bool)
+    keep_mask = np.asarray(keep_mask)
+    if keep_mask.dtype != np.bool_ or keep_mask.shape != (len(original),):
+        raise ValueError("keep_mask must be one Boolean per original row")
+
+    kept = original[keep_mask]
+    cfg = pd.DataFrame({"cfg": kept["cfg"].astype(str)})
+    cfg = clean_configuration_strings(cfg)
+    derived_pi = "pi" not in names
+    if derived_pi:
+        cfg = add_pi_from_cfg(cfg)
+    clean_fields = []
+    for name in names:
+        if name == "pcm" and derived_pi:
+            clean_fields.append(("pi", np.dtype("i1")))
+        clean_fields.append((name, original.dtype.fields[name][0]))
+    if derived_pi and "pcm" not in names:
+        clean_fields.append(("pi", np.dtype("i1")))
+    clean_fields.append(("original_cfg", original.dtype.fields["cfg"][0]))
+    cleaned = np.empty(len(kept), dtype=clean_fields)
+    for name in names:
+        cleaned[name] = kept[name]
+    cleaned["cfg"] = cfg["cfg"].to_numpy()
+    cleaned["original_cfg"] = kept["cfg"]
+    if derived_pi:
+        cleaned["pi"] = cfg["pi"].to_numpy()
+
+    row_dtype = "u4" if len(original) <= np.iinfo(np.uint32).max else "u8"
+    deleted_fields = [(n, original.dtype.fields[n][0]) for n in names if n != "cfg"]
+    deleted_fields.extend([
+        ("original_row", row_dtype),
+        ("original_cfg", original.dtype.fields["cfg"][0]),
+    ])
+    deleted = np.empty(np.count_nonzero(~keep_mask), dtype=deleted_fields)
+    for name in names:
+        target = "original_cfg" if name == "cfg" else name
+        deleted[target] = original[name][~keep_mask]
+    deleted["original_row"] = np.flatnonzero(~keep_mask)
+    return cleaned, deleted
+
+
+def restore_level_records(cleaned, deleted, source_dtype, source_count):
+    """Reconstruct the pre-clean level records, including their original order."""
+    kept_count = 0 if cleaned is None else len(cleaned)
+    deleted_count = 0 if deleted is None else len(deleted)
+    if kept_count + deleted_count != source_count:
+        raise ValueError("Kept and deleted row counts do not match the source")
+    positions = (np.empty(0, dtype=np.uint64) if deleted is None
+                 else deleted["original_row"])
+    if (np.any(positions >= source_count) or
+            len(np.unique(positions)) != len(positions)):
+        raise ValueError("Invalid or duplicate original_row values")
+    keep_mask = np.ones(source_count, dtype=bool)
+    keep_mask[positions] = False
+    restored = np.empty(source_count, dtype=source_dtype)
+    for name in restored.dtype.names:
+        archived_name = "original_cfg" if name == "cfg" else name
+        if cleaned is not None:
+            restored[name][keep_mask] = cleaned[archived_name]
+        if deleted is not None:
+            restored[name][positions] = deleted[archived_name]
+    return restored
+
+
+def _assert_original_levels(original, restored):
+    """Fail if any source field changes, including NaN bits or string bytes."""
+    if original.dtype != restored.dtype or original.shape != restored.shape:
+        raise ValueError("Restored level structure differs from the source")
+    for name in original.dtype.names:
+        if original[name].tobytes() != restored[name].tobytes():
+            raise ValueError(f"Non-reversible level cleaning: field {name!r} changed")
+
+
+def restore_level_table(path, lev_path):
+    """Return original records, treating absent retained/deleted tables as empty.
+
+    Source metadata is present on either nonempty table. An originally empty
+    source is recorded as an empty typed file attribute, not a dataset.
+    """
+    with h5py.File(path, "r") as h5f:
+        cleaned_ds = h5f.get(lev_path)
+        deleted_ds = h5f.get(lev_path + "_delete")
+        if cleaned_ds is None and deleted_ds is None:
+            return h5f.attrs["empty_level:" + lev_path]
+        ds = cleaned_ds if cleaned_ds is not None else deleted_ds
+        names = list(ds.attrs["source_field_names"])
+        # Read field types from HDF5 itself, preserving string-encoding metadata.
+        source_dtype = np.dtype({
+            "names": names,
+            "formats": [ds.dtype.fields["original_cfg" if n == "cfg" else n][0]
+                        for n in names],
+            "offsets": list(ds.attrs["source_field_offsets"]),
+            "itemsize": int(ds.attrs["source_itemsize"]),
+        })
+        return restore_level_records(
+            None if cleaned_ds is None else cleaned_ds[:],
+            None if deleted_ds is None else deleted_ds[:], source_dtype,
+            int(ds.attrs["source_row_count"]),
+        )
+
+
+def clean_level_table(path_ad, lev_path, path_c, *, filter_atomdb_terms=False):
+    """Write a reversible level-only archive; never read or clean transitions."""
+    if Path(path_ad).resolve() == Path(path_c).resolve():
+        raise ValueError("Source atomic_data and destination clean_data must differ")
+    if not lev_path.startswith("lev_") or lev_path.endswith("_delete"):
+        raise ValueError("Expected an original lev_<database> table")
+    with h5py.File(path_ad, "r") as src:
+        original = src[lev_path][:]
+        source_attrs = dict(src[lev_path].attrs)
+    keep_mask = None
+    if filter_atomdb_terms:
+        keep_mask = (original["2S+1"] >= 0) & (original["L"] >= 0)
+    cleaned, deleted = build_level_tables(original, keep_mask)
+    _assert_original_levels(original, restore_level_records(
+        cleaned, deleted, original.dtype, len(original),
+    ))
+    Path(path_c).parent.mkdir(parents=True, exist_ok=True)
+    with h5py.File(path_c, "a") as dst:
+        # Append mode must not leave transitions from an earlier cleaner run.
+        stale_transitions = []
+        dst.visititems(lambda name, obj: stale_transitions.append(name)
+                       if isinstance(obj, h5py.Dataset)
+                       and name.split("/")[-1].startswith("tran_") else None)
+        for name in stale_transitions:
+            del dst[name]
+        # Keep enough metadata to restore a genuinely empty source without
+        # creating a zero-row dataset. Clear an older marker on repeated runs.
+        empty_key = "empty_level:" + lev_path
+        empty_attr_prefix = "empty_source_attr:" + lev_path + ":"
+        for attr in list(dst.attrs):
+            if attr == empty_key or attr.startswith(empty_attr_prefix):
+                del dst.attrs[attr]
+        if not len(original):
+            dst.attrs[empty_key] = original
+            for attr, value in source_attrs.items():
+                dst.attrs[empty_attr_prefix + attr] = value
+        for name, records in ((lev_path, cleaned), (lev_path + "_delete", deleted)):
+            if name in dst:
+                del dst[name]
+            if not len(records):
+                continue
+            ds = dst.create_dataset(name, data=records, compression="gzip")
+            for attr, value in source_attrs.items():
+                ds.attrs["source_attr:" + attr] = value
+            ds.attrs["columns"] = list(records.dtype.names)
+            ds.attrs["source_field_names"] = list(original.dtype.names)
+            ds.attrs["source_field_offsets"] = [original.dtype.fields[n][1]
+                                                for n in original.dtype.names]
+            ds.attrs["source_itemsize"] = original.dtype.itemsize
+            ds.attrs["source_row_count"] = len(original)
+            ds.attrs["level_clean_schema"] = 3
+        if lev_path in dst:
+            dst[lev_path].attrs["derived_pi"] = "pi" not in original.dtype.names
+    # Verify the actual serialized archive as well as the in-memory partition.
+    _assert_original_levels(original, restore_level_table(path_c, lev_path))
+    return {"original": len(original), "kept": len(cleaned), "deleted": len(deleted)}
+
+
+def default_atomic_data_dir(project_root):
+    """Prefer local inputs, otherwise use the sibling cfadb inputs read-only."""
+    local = Path(project_root) / "atomic_data"
+    return local if local.is_dir() else Path(project_root).parent / "cfadb" / "atomic_data"
+
 
 ORBITAL_L = {
     "s": 0,
@@ -38,6 +222,27 @@ _SUBSHELL_RE = re.compile(
     r"\s*\^?\s*"
     r"(\d*)"
 )
+
+
+def clean_configuration_strings(
+    lev_df: pd.DataFrame,
+    *,
+    cfg_col: str = "cfg",
+    inplace: bool = False,
+) -> pd.DataFrame:
+    """Remove trailing dot padding from electronic configurations.
+
+    Internal separators and parent-term labels are preserved: ``1s.2s...``
+    becomes ``1s.2s``, while ``1s.2p(3P)`` is unchanged. Whitespace after
+    trailing dots is removed with the padding. Missing values stay missing,
+    and applying this function again leaves the result unchanged.
+    """
+    df = lev_df if inplace else lev_df.copy()
+    if cfg_col not in df.columns:
+        raise KeyError(f"Missing required configuration column: {cfg_col}")
+
+    df[cfg_col] = df[cfg_col].str.replace(r"\.+\s*$", "", regex=True)
+    return df
 
 
 def _remove_parent_state_labels(cfg: str) -> str:

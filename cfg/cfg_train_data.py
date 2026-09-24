@@ -604,7 +604,7 @@ def read_cfgs_from_h5(path: str) -> List[str]:
         keys = list(f.keys())
 
     for key in keys:
-        if not key.startswith("lev_"):
+        if not key.startswith("lev_") or key.endswith("_delete"):
             continue
 
         df = _df_from_h5(path, key)

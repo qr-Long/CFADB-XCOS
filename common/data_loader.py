@@ -160,7 +160,9 @@ def process_hdf5_file(hdf5_path, model):
 
     with h5py.File(hdf5_path, 'r') as f:
         def find_lev_datasets(name, obj):
-            if isinstance(obj, h5py.Dataset) and name.split('/')[-1].startswith('lev_'):
+            if (isinstance(obj, h5py.Dataset)
+                    and name.split('/')[-1].startswith('lev_')
+                    and not name.endswith('_delete')):
                 suffix = name.split('lev_')[-1]
                 lev_suffixes.append(suffix)
                 dataset_paths[f'lev_{suffix}'] = name
