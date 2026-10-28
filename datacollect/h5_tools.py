@@ -108,18 +108,25 @@ def explore_hdf5_structure(h5_path):
 
 
 def merge_hdf5_keep_new(file_src, file_dest):
-    """Merge source HDF5 content into a destination file, replacing name conflicts."""
+    """Merge whole datasets, preserving attributes, dtypes and HDF5 filters."""
+    if os.path.realpath(file_src) == os.path.realpath(file_dest):
+        raise ValueError("Source and destination HDF5 files must differ")
+
     def merge_groups(src, dest):
+        for key, value in src.attrs.items():
+            dest.attrs[key] = value
         for name, item in src.items():
             if isinstance(item, h5py.Group):
+                if name in dest and not isinstance(dest[name], h5py.Group):
+                    del dest[name]
                 if name not in dest:
-                    dest.copy(item, name)
+                    src.copy(name, dest, name=name)
                 else:
                     merge_groups(item, dest[name])
             elif isinstance(item, h5py.Dataset):
                 if name in dest:
                     del dest[name]
-                dest.create_dataset(name, data=item[()])
+                src.copy(name, dest, name=name)
 
     with h5py.File(file_src, 'r') as src, h5py.File(file_dest, 'r+') as dest:
         merge_groups(src, dest)
@@ -127,10 +134,13 @@ def merge_hdf5_keep_new(file_src, file_dest):
 
 def merge_h5_folders(folder_src, folder_dest):
     """Merge HDF5 files from a source folder into matching destination files."""
+    if os.path.realpath(folder_src) == os.path.realpath(folder_dest):
+        raise ValueError("Source and destination folders must differ")
+    os.makedirs(folder_dest, exist_ok=True)
     files_src = {f for f in os.listdir(folder_src) if f.endswith('.h5')}
     files_dest = {f for f in os.listdir(folder_dest) if f.endswith('.h5')}
 
-    for f in files_src:
+    for f in sorted(files_src):
         path_src = os.path.join(folder_src, f)
         path_dest = os.path.join(folder_dest, f)
 

@@ -2,19 +2,18 @@
 
 CFADB-XCOS is the research software and standardized atomic energy-level archive accompanying the paper **“Automated Cross-database Mapping of Atomic Energy-Level Data for Astrophysical Plasma Models.”** It identifies corresponding atomic energy levels across AtomDB v3.1.3, CHIANTI v11.0.2, and SPEX v3.08.01 using a combined similarity score, referred to here as XCOS, based on electronic configuration, term quantum numbers and parity, and energy information, followed by threshold-constrained Hungarian matching. Standardized SPEX/SPEXACT v3.08.03 tables are also retained for supplementary comparison, but the principal analysis and default sequence-wide scan use SPEX v3.08.01.
 
-The current review archive is available on [Zenodo Sandbox](https://sandbox.zenodo.org/records/574242). This is a temporary record; the production Zenodo record and DOI will be added when the formal release is published.
-
-> **Start here.** Open the latest hosted Viewer through [Binder/Voilà](https://mybinder.org/v2/gh/qr-Long/CFADB-XCOS/main?urlpath=voila%2Frender%2Fviewer%2Fthr_viewer.ipynb), or run it locally from the repository root:
+> **Start here.** Install the dependencies as described in [Quick Start](#2-quick-start), then launch the Viewer locally from the repository root:
 >
 > ```bash
 > voila ./viewer/thr_viewer.ipynb --show_tracebacks=True
 > ```
 >
-> The browser interface lets users select the sequence, ion, database pair, and threshold grid without editing notebook code. The hosted link follows the current GitHub `main` branch; use the archived files and the local command above when reproducing a specific Zenodo release.
+> The browser interface lets users select the sequence, ion, database pair, and threshold grid without editing notebook code. Use the data and models from the same archived version when reproducing a run.
 
 ## Contents
 
 - [Repository tree](#repository-tree)
+- [Version control](#version-control)
 - [1. Overview](#1-overview)
 - [2. Quick Start](#2-quick-start)
   - [2.1 Install the dependencies and run from the repository root](#21-install-the-dependencies-and-run-from-the-repository-root)
@@ -26,6 +25,7 @@ The current review archive is available on [Zenodo Sandbox](https://sandbox.zeno
   - [3.1 Sequence coverage](#31-sequence-coverage)
   - [3.2 Ion-file naming convention](#32-ion-file-naming-convention)
   - [3.3 HDF5 datasets and level-table columns](#33-hdf5-datasets-and-level-table-columns)
+  - [3.4 CHIANTI energy selection and provenance](#34-chianti-energy-selection-and-provenance)
 - [4. Interactive Matching Viewer](#4-interactive-matching-viewer)
 - [5. Configuration Model (`cfg`)](#5-configuration-model-cfg)
   - [`cfg_train_data.py`](#cfg_train_datapy)
@@ -43,6 +43,7 @@ The current review archive is available on [Zenodo Sandbox](https://sandbox.zeno
 - [10. Figure Reproduction and Main Outputs](#10-figure-reproduction-and-main-outputs)
 - [11. Software Requirements and Reproducibility Notes](#11-software-requirements-and-reproducibility-notes)
   - [Main dependencies](#main-dependencies)
+  - [Optional source-data collection](#optional-source-data-collection)
   - [Opening the other notebooks](#opening-the-other-notebooks)
   - [Common usage issues](#common-usage-issues)
   - [Reproducibility notes](#reproducibility-notes)
@@ -59,7 +60,8 @@ The archive is organized by scientific function rather than by a single executio
 cfadb-xcos/
 ├── README.md                              # English project documentation
 ├── requirements.txt                      # Python dependency specification
-├── runtime.txt                           # Binder Python runtime declaration
+├── requirements-collect.txt              # Optional AtomDB collection dependency
+├── runtime.txt                           # Python runtime declaration
 ├── clean_data/                            # Retained and excluded energy-level records in HDF5
 │   ├── 010101.h5                          # First H-like file: H-like hydrogen
 │   ├── ...                                # Other H-like ions
@@ -99,12 +101,12 @@ cfadb-xcos/
 │   └── data_loader.py                     # Loads database pairs and builds a preliminary identifier-based map
 ├── datacollect/                           # Data-preparation and HDF5 utilities
 │   ├── adb_to_h5.py                       # AtomDB table-preparation code
-│   ├── cdb_to_h5.py                       # CHIANTI table-preparation code
+│   ├── cdb_to_h5.py                       # CHIANTI level collection, observed-first selection and validation
 │   ├── spex_to_h5.py                      # SPEX table-preparation code
 │   └── h5_tools.py                        # HDF5 conversion, reading, inspection, and merge utilities
 ├── dataclean/                             # Standardizes collected database tables
 │   ├── adb_clean.py                       # Cleans AtomDB tables
-│   ├── cdb_clean.py                       # Cleans CHIANTI tables
+│   ├── cdb_clean.py                       # Validates and cleans collected CHIANTI levels
 │   ├── spex_clean.py                      # Cleans SPEX tables
 │   ├── base_tools.py                      # Shared cleaning and configuration-parity utilities
 │   └── seq_list.py                        # Selects files by sequence and ion range
@@ -134,6 +136,12 @@ cfadb-xcos/
 ```
 
 Matching-output directories are created as needed; the bundled configuration-model figure is stored separately under `map_data/cfg_ts/figs/`. `map_data/thr_view/` is created when pair data are loaded, `map_data/photos/` is created by `sim_only_viewer.ipynb`, `data/` is created by the standalone table and energy-plot workflows, and `cos_data/` is created by `cos_scan_match.py`.
+
+## Version control
+
+- **0.3.0 — Observed-first CHIANTI energies.** Uses finite, nonnegative observed energies (including zero) when available, otherwise theoretical energies, with consistent `pcm`, `ryd`, and `eV` values. Includes one explicit theoretical-energy exception for Na IX level 81. Preserves dataset attributes during HDF5 merging and source provenance during cleaning. Updates `clean_data/` for all five supported sequences while retaining reversible cleaning. Configuration models and matching algorithms are unchanged. See [Section 3.4](#34-chianti-energy-selection-and-provenance) for the energy policy and [Section 9](#9-cleaning-and-exact-level-table-restoration) for restoration details.
+- **0.2.0 — Data parsing and reversible cleaning.** Removed trailing configuration padding (e.g. `1s...` → `1s`) while preserving internal separators. Corrected CHIANTI theoretical-energy parsing from Python slice `[72:85]` to `[72:87]`, retaining the complete 15-character field; this version still used theoretical energies. Added `original_cfg` and nonempty `lev_<database>_delete` archives with `original_row` and restoration metadata, allowing exact reconstruction of pre-clean standardized level tables. Rebuilt `clean_data/` as a level-only archive without `tran_*` tables, covered both SPEX versions in the cleaner, and excluded deletion archives from training and matching inputs. Batch scans no longer required transition tables and required `N_theo > 0` for a successful match.
+- **0.1.0 — First usable release.** Established the end-to-end workflow for standardized atomic data, configuration models, XCOS similarity, threshold-constrained matching, and the interactive Viewer.
 
 ## 1. Overview
 
@@ -183,11 +191,11 @@ The Viewer opens with browser controls rather than an editable parameter cell:
 | `Threshold min`, `Threshold max`, `Threshold step` | Threshold grid evaluated lazily by the Viewer. The public interface accepts at most 101 values per load. |
 | `Load Viewer` | Loads the selected data, computes the XCOS similarity matrix, and opens the matching interface. |
 
-The principal publication settings remain fixed internally as `EDGE_ABLATION="xcos"`, `XCOS_KEEP="cfg,phys,energy"`, and `MODEL_PATH=None`. The default XCOS weights are 0.47 for configuration, 0.25 for term quantum numbers and parity, and 0.28 for energy.
+The Viewer combines all three XCOS components. The default weights are 0.47 for configuration, 0.25 for term quantum numbers and parity, and 0.28 for energy.
 
 The Viewer grid requires `0 <= min <= max <= 1` and a positive step. It includes `max` only if the step reaches it; for example, `min=0`, `max=0.99`, `step=0.01` gives 100 values. This differs from the batch scanner's exclusive `--threshold-stop`. After changing the sequence, ion, databases, or grid, click **Load Viewer** again to apply those selections to the matching interface.
 
-Only retained `lev_<database>` datasets are listed; `_delete` archives are excluded. Sequence selection chooses the configuration encoder and ion list. It does **not** automatically apply the sequence-dependent validation parameters from Table 6; set the rule controls to the values in Section 6 when reproducing the paper.
+Only retained `lev_<database>` datasets are listed; `_delete` archives are excluded. Sequence selection chooses the configuration encoder and ion list. It does **not** automatically apply the sequence-dependent validation parameters from Table 6. Set the validation controls explicitly using the parameters listed in Section 6, and check acceptance on the loaded data.
 
 ### 2.3 Main interface functions
 
@@ -195,7 +203,7 @@ The interface displays the total similarity matrix, threshold-constrained Hungar
 
 The current map DAT file is available immediately. Full similarity DAT files, changed-region DAT files, and PDF figures are prepared only after the corresponding **Prepare** button is clicked, which avoids repeatedly serializing large files during ordinary threshold or display changes.
 
-A Binder session may require an initial environment build. Large ions, dense threshold grids, complete change spans, and complete traces require more computation. The formal release will be archived on production Zenodo; the hosted Viewer is a convenient execution entry point.
+Large ions, dense threshold grids, complete change spans, and complete traces require more computation. Local execution uses the data and models in the downloaded archive.
 
 ### 2.4 First example: load, validate, and export a map
 
@@ -275,13 +283,53 @@ energy-level table has the following columns:
 | `eV` | Energy in electronvolts. |
 | `original_cfg` | Original configuration before cleaning; always the last field. |
 
-The matching inputs are the retained `lev_<database>` tables. The `original_cfg` field and `_delete` tables are archival information and are excluded from the similarity features. Only retained levels contribute to the level-count statistics in the paper.
+The matching inputs are the retained `lev_<database>` tables. The `original_cfg` field and `_delete` tables are archival information and are excluded from the similarity features. Only retained levels contribute to the level-count statistics in Section 3.1.
 
 Deleted level records retain
 the original fields, with `cfg` renamed to the final field `original_cfg`, and
 `original_row` recording the zero-based source row position. No derived `pi` is
 added to deleted records. Together with retained records, they reconstruct the
 pre-clean source level table, including its row order. See [Section 9](#9-cleaning-and-exact-level-table-restoration) for the reconstruction equations, restoration function, and empty-table handling.
+
+### 3.4 CHIANTI energy selection and provenance
+
+For each CHIANTI v11.0.2 level, version 0.3.0 selects the observed energy if it
+is finite and nonnegative; otherwise it selects the theoretical energy. Zero is
+valid, including the ground state. Negative missing-value markers, NaN, and
+infinity are not usable observations. Except for the explicit case below, a valid
+observed value is retained even when it differs substantially from theory. If the theoretical
+fallback is also unavailable, its source value is preserved rather than inventing
+an energy. All selected energies in the bundled tables are finite and nonnegative.
+
+The selected energy is stored as a 32-bit floating-point `pcm` value in cm⁻¹.
+`ryd` and `eV` are calculated from that stored value and saved with the same
+precision. These columns express **one selected energy in three units**.
+Cleaning preserves their values and data types.
+
+**Explicit exception:** for Na IX (`031109`), CHIANTI v11.0.2 level `idx=81`
+(`1s.2p.3p`, multiplicity 2, L=2, J=5/2), this archive adopts the theoretical
+energy 10,464,952 cm⁻¹ (1297.488647 eV), consistent with AtomDB level 81, instead
+of the source observed energy 1,048,314 cm⁻¹ (129.974365 eV), which is about ten
+times smaller; this is a documented curation choice, not an automatic outlier rule.
+
+The cleaned CHIANTI datasets preserve the following source attributes:
+
+| Attribute | Meaning |
+|---|---|
+| `source_attr:energy_policy` | `observed_if_finite_nonnegative_else_theoretical`; the Na IX table adds `_with_explicit_theoretical_overrides` to identify its exception. |
+| `source_attr:energy_overrides` | Present on the Na IX table: a JSON record of the exception's ion, level identifier, original observed and theoretical energies in cm⁻¹, selected source, and reason. |
+| `source_attr:energy_schema` | Version of the source-energy metadata format. |
+| `source_attr:energy_sha256` | SHA-256 checksum identifying the parsed source energy records. |
+| `source_attr:source_elvlc_sha256` | SHA-256 checksum identifying the original CHIANTI `.elvlc` level file. |
+
+SHA-256 checksums are fingerprints for comparing source content; they do not
+store or reconstruct that content. The HDF5 file attribute
+`cfadb_xcos_version` identifies the package version that produced the file.
+
+The bundled tables retain the selected energy, not both original energy columns.
+Restoration recovers the standardized level table with that selected energy;
+the original CHIANTI distribution is needed to obtain both source columns or the
+original text file. See [Section 9](#9-cleaning-and-exact-level-table-restoration).
 
 ## 4. Interactive Matching Viewer
 
@@ -365,25 +413,28 @@ By default, `cos_scan_match.py` writes its text and CSV reports to:
 cos_data/real_data_scan/<sequence>/
 ```
 
-The script defaults to the **Ne-like** validation settings. Changing only
-`--ion-type` does not change these rule parameters. To reproduce the five
-sequences, use the following Table 6 settings; energy tolerances are fractions
-for relative differences and eV for absolute differences.
+The script defaults to the current **Ne-like** validation settings: configuration
+similarity 0.76, relative energy difference 0.026, and absolute energy difference
+4.3 eV, with `rel_or_abs`. Changing only `--ion-type` does not change these rule
+parameters. The table below gives the **current manuscript's Table 6 settings**
+for the bundled observed-first CHIANTI data, including the Na IX exception.
+Energy tolerances are fractions for relative differences and eV for absolute
+differences.
 
 | Sequence | `--cfg-cos-thr` | `--energy-rel-thr` | `--energy-abs-thr` | `--energy-rule-mode` |
 |---|---:|---:|---:|---|
-| H-like | 0.99 | 0.007 | Not used | `rel_only` |
+| H-like | 0.99 | 0.005 | Not used | `rel_only` |
 | He-like | 0.99 | 0.008 | Not used | `rel_only` |
-| Li-like | 0.85 | 0.018 | Not used | `rel_only` |
-| Be-like | 0.80 | 0.064 | 1.0 | `rel_or_abs` |
-| Ne-like | 0.76 | 0.023 | 4.4 | `rel_or_abs` |
+| Li-like | 0.85 | 0.013 | Not used | `rel_only` |
+| Be-like | 0.80 | 0.064 | Not used | `rel_only` |
+| Ne-like | 0.76 | 0.026 | 4.3 | `rel_or_abs` |
 
 For example, run the Be-like scan from the repository root:
 
 ```bash
 python cos/cos_scan_match.py --ion-type be-like \
-  --cfg-cos-thr 0.80 --energy-rel-thr 0.064 --energy-abs-thr 1.0 \
-  --energy-rule-mode rel_or_abs \
+  --cfg-cos-thr 0.80 --energy-rel-thr 0.064 \
+  --energy-rule-mode rel_only \
   --threshold-start 0.0 --threshold-stop 0.991 --threshold-step 0.01
 ```
 
@@ -427,11 +478,17 @@ from datacollect.h5_tools import ds_to_df
 levels = ds_to_df("clean_data/020605.h5", "lev_atomdb313")
 ```
 
-`common.data_loader.load_pair_from_h5` is the pair-loading entry point used by the Viewer. `datacollect/h5_tools.py` provides the HDF5 reading and conversion helpers used by these workflows.
+`common.data_loader.load_pair_from_h5` is the pair-loading entry point used by the Viewer. `datacollect/h5_tools.py` provides the HDF5 reading and conversion helpers used by these workflows. The database-specific collection and cleaning modules are preparation tools for separately obtained source data. They are not required to use the bundled `clean_data/` tables or to restore their pre-clean records.
 
 ## 9. Cleaning and Exact Level-Table Restoration
 
 The packaged `clean_data/` files contain the information needed to reconstruct their pre-clean level tables. In this section, **original table** means the ordered, structured level table immediately before cleaning. Restoration uses only the packaged HDF5 file and `dataclean/base_tools.py`.
+For CHIANTI, this is the standardized main level table **after observed-first
+energy selection and before cleaning**. It is not the original `.elvlc` file.
+Restoration from `clean_data/` alone cannot recover the two original energy
+columns, source comments or text formatting. Obtain the original CHIANTI
+distribution when those source details are needed.
+Hashes identify and verify source content; they do not reconstruct missing values.
 
 ### 9.1 Stored cleaning information
 
@@ -542,6 +599,11 @@ For matching and training, use the retained `lev_<database>` tables. The databas
 
 ## 10. Figure Reproduction and Main Outputs
 
+The programs below provide the plotting and analysis workflows for the current
+manuscript, using the bundled version 0.3.0 data and models. Use the sequence-wide
+validation settings in Section 6 for the Table 6 scan; for individual illustrative
+figures, use the ion, database pair, and validation settings stated in the paper.
+
 | Program | Paper figure or main output | Output location or form |
 |---|---|---|
 | `viewer/thr_viewer.ipynb` | Similarity matrices, threshold-constrained Hungarian maps, rule diagnostics, and matching figures | Interactive Voilà interface with downloadable PDF and DAT files; `map_data/thr_view/` is created at runtime for pair-specific working directories |
@@ -557,7 +619,7 @@ Other threshold-overlay and similarity-submatrix figures in the paper can be gen
 
 ### Main dependencies
 
-Python 3.11 is the Binder target recorded in `runtime.txt`. The core runtime and notebook dependencies are specified in `requirements.txt` using compatible version ranges. Install them from the repository root with:
+Python 3.11 is the runtime recorded in `runtime.txt`. The core runtime and notebook dependencies are specified in `requirements.txt` using compatible version ranges. Install them from the repository root with:
 
 ```bash
 python -m venv .venv
@@ -571,6 +633,32 @@ The dependency ranges are installation constraints, not an exact environment loc
 The dependency file includes NumPy, pandas, h5py, SciPy, Matplotlib, seaborn, PyTorch, scikit-learn, Astropy, IPython, Jupyter Notebook, ipywidgets, and Voilà.
 
 PyTorch installations with a specific CUDA build may be installed separately before running `pip install -r requirements.txt`; the archived models and viewer can also be used on a CPU-only installation.
+
+### Optional source-data collection
+
+The bundled `clean_data/` is ready for matching. Collecting source data is optional
+and requires separately obtained database distributions. For AtomDB collection,
+install the additional dependency and point the collector to an initialized local
+AtomDB 3.1.3 root containing `VERSION`, `filemap`, `APED/`, and PyAtomDB's `userdata`:
+
+```bash
+python -m pip install -r requirements-collect.txt
+python datacollect/adb_to_h5.py --atomdb-root /path/to/atomdb313 --z-stop 37
+```
+
+The collector uses local files only; `--z-stop` is exclusive, so 37 includes
+Z = 36. If PyAtomDB requests initialization, configure the local installation
+before collection. For SPEX and CHIANTI, specify their source directories:
+
+```bash
+python datacollect/spex_to_h5.py --spex-root /path/to/SPEX-3.08.01-Source --version 30801
+python datacollect/cdb_to_h5.py --source /path/to/CHIANTI_11.0.2_database
+```
+
+Replace the example paths with your local paths. For SPEX v3.08.03, use its source
+directory and `--version 30803`. All three collectors accept `--output` to choose
+the destination. These commands collect source tables; subsequent cleaning is a
+separate step. They do not replace the bundled `clean_data/` automatically.
 
 ### Opening the other notebooks
 
@@ -612,13 +700,13 @@ sys.path.insert(0, str(root))
 
 ### Repository rights
 
-Licensing terms for the original CFADB-XCOS source code and documentation are defined by the Zenodo record. They do not apply to third-party atomic data under `clean_data/`. This README does not independently grant additional rights.
+For reuse terms, consult the license metadata attached to the specific archived release or contact the author. No standalone `LICENSE` file is included in this version, and this README does not independently grant a license. Any license for original CFADB-XCOS code and documentation does not override the terms applicable to third-party atomic data in `clean_data/`.
 
 ### Packaged datasets and attribution
 
 The `clean_data/` archive uses `lev_atomdb313`, `lev_chianti1102`, `lev_spex30801`, and `lev_spex30803` for retained energy levels, with optional `lev_<database>_delete` tables for excluded records. Availability varies by ion. The database labels identify the versions listed in Section 3.
 
-When reporting results obtained with this package, identify the database versions used and cite the accompanying article and the relevant archive record. Attribution to the AtomDB, CHIANTI, and SPEX teams remains applicable to their data in these tables; standardization does not alter the associated rights or attribution requirements. The article provides the corresponding scientific references and acknowledgements.
+When reporting results obtained with this package, identify CFADB-XCOS version 0.3.0 and the database versions used. Cite the accompanying article and the archive record for the version used, when available. Attribution to the AtomDB, CHIANTI, and SPEX teams remains applicable to their data in these tables; standardization does not alter the associated rights or attribution requirements. The accompanying manuscript provides the corresponding scientific references and acknowledgements.
 
 ### Contact
 
