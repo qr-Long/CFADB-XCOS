@@ -1,0 +1,183 @@
+{
+  "version": "1.0.0",
+  "weights": [
+    0.47,
+    0.25,
+    0.28
+  ],
+  "databases": [
+    "atomdb313",
+    "chianti1102",
+    "spex30801"
+  ],
+  "max_atomic_number": 30,
+  "threshold_grid": {
+    "start": 0.0,
+    "stop": 0.99,
+    "step": 0.01
+  },
+  "sequence_rules": {
+    "h-like": {
+      "cfg_cos_thr": 0.99,
+      "energy_rel_thr": 0.005,
+      "energy_abs_thr": 0.0,
+      "energy_rule_mode": "rel_only"
+    },
+    "he-like": {
+      "cfg_cos_thr": 0.99,
+      "energy_rel_thr": 0.008,
+      "energy_abs_thr": 0.0,
+      "energy_rule_mode": "rel_only"
+    },
+    "li-like": {
+      "cfg_cos_thr": 0.85,
+      "energy_rel_thr": 0.013,
+      "energy_abs_thr": 0.0,
+      "energy_rule_mode": "rel_only"
+    },
+    "be-like": {
+      "cfg_cos_thr": 0.8,
+      "energy_rel_thr": 0.064,
+      "energy_abs_thr": 0.0,
+      "energy_rule_mode": "rel_only"
+    },
+    "ne-like": {
+      "cfg_cos_thr": 0.76,
+      "energy_rel_thr": 0.026,
+      "energy_abs_thr": 4.3,
+      "energy_rule_mode": "rel_or_abs"
+    }
+  },
+  "viewer_examples": {
+    "7a": {
+      "sequence": "ne-like",
+      "ion": "102516",
+      "db1": "atomdb313",
+      "db2": "spex30801",
+      "threshold": 0.72,
+      "db1_range": null,
+      "db2_range": null,
+      "rules": {
+        "cfg_cos_thr": 0.89,
+        "energy_rel_thr": 0.023,
+        "energy_abs_thr": 0.0,
+        "energy_rule_mode": "rel_only"
+      },
+      "diff": "off",
+      "labels": "idx",
+      "figsize": [
+        6,
+        5.4
+      ]
+    },
+    "7b": {
+      "sequence": "ne-like",
+      "ion": "102516",
+      "db1": "atomdb313",
+      "db2": "spex30801",
+      "threshold": 0.72,
+      "db1_range": [
+        1,
+        60
+      ],
+      "db2_range": [
+        1,
+        60
+      ],
+      "rules": {
+        "cfg_cos_thr": 0.89,
+        "energy_rel_thr": 0.023,
+        "energy_abs_thr": 0.0,
+        "energy_rule_mode": "rel_only"
+      },
+      "diff": "off",
+      "labels": "idx",
+      "figsize": [
+        6,
+        5.4
+      ]
+    },
+    "8a": {
+      "sequence": "be-like",
+      "ion": "042623",
+      "db1": "atomdb313",
+      "db2": "spex30801",
+      "threshold": 0.89,
+      "db1_range": [
+        309,
+        322
+      ],
+      "db2_range": [
+        1126,
+        1139
+      ],
+      "rules": {
+        "cfg_cos_thr": 0.8,
+        "energy_rel_thr": 0.11,
+        "energy_abs_thr": 0.0,
+        "energy_rule_mode": "rel_only"
+      },
+      "diff": "rules",
+      "labels": "full",
+      "figsize": [
+        6,
+        5.8
+      ]
+    },
+    "8b": {
+      "sequence": "li-like",
+      "ion": "030806",
+      "db1": "chianti1102",
+      "db2": "spex30801",
+      "threshold": 0.73,
+      "db1_range": [
+        68,
+        76
+      ],
+      "db2_range": [
+        260,
+        268
+      ],
+      "rules": {
+        "cfg_cos_thr": 0.86,
+        "energy_rel_thr": 0.12,
+        "energy_abs_thr": 0.0,
+        "energy_rule_mode": "rel_only"
+      },
+      "diff": "rules",
+      "labels": "full",
+      "figsize": [
+        6,
+        5.5
+      ]
+    },
+    "9": {
+      "sequence": "he-like",
+      "ion": "020908",
+      "db1": "atomdb313",
+      "db2": "spex30801",
+      "threshold": 0.9,
+      "db1_range": [
+        200,
+        204
+      ],
+      "db2_range": [
+        513,
+        522
+      ],
+      "rules": {
+        "cfg_cos_thr": 0.99,
+        "energy_rel_thr": 0.008,
+        "energy_abs_thr": 0.0,
+        "energy_rule_mode": "rel_only"
+      },
+      "diff": "rules",
+      "labels": "full",
+      "figsize": [
+        6,
+        3.8
+      ]
+    }
+  },
+  "edition": "paper-reproduction"
+}

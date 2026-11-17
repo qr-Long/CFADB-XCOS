@@ -1,0 +1,13 @@
+{
+  "inputs": {
+    "models/li-like/cfg_ts_model.pth": "a6b60906ed5e3114ce2387b072fb60c37e9411bcd814eb00fefffb0ad0c29bff",
+    "models/li-like/cfg_vocab.pkl": "32273ca489f148b40743ae062f6dd3045f2de9efc4d5aa561a2a3fd82baf0d7d",
+    "models/training_pairs/li_like_pairs.tsv": "c784a3a1baf4717b3d27f3170c13d25c7c467be5a52d8150cb900330dd5a25a1"
+  },
+  "csv_sha256": "3139e8eeab167fd05f1990aa22561affee389dc1428ad6fb301ce9492beb0d3f",
+  "sample_seed": 0,
+  "tsne_seed": 42,
+  "perplexity": 30,
+  "sklearn_version": "1.4.2",
+  "torch_version": "2.5.1"
+}

@@ -1,0 +1,18 @@
+{
+  "Voila": {
+    "ip": "127.0.0.1",
+    "mathjax_url": "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/MathJax.js",
+    "mathjax_config": "TeX-AMS_CHTML-full,Safe"
+  },
+  "VoilaConfiguration": {
+    "extension_allowlist": [
+      "@voila-dashboards/widgets-manager7",
+      "@voila-dashboards/widgets-manager8"
+    ],
+    "show_tracebacks": true
+  },
+  "VoilaExecutor": {
+    "timeout": 120,
+    "interrupt_on_timeout": true
+  }
+}

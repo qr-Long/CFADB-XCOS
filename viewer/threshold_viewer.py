@@ -24,12 +24,12 @@ from matplotlib.ticker import FormatStrFormatter
 import numpy as np
 import pandas as pd
 
-from thr_hung.rules import build_rule_matrices, evaluate_selected_matches
+from core.matching import build_rule_matrices, evaluate_selected_matches
 
 
-DEFAULT_CLEAN_DATA_DIR = Path("./clean_data")
-DEFAULT_THR_VIEW_ROOT = Path("./map_data/thr_view")
-DEFAULT_CFG_MODEL_ROOT = Path("./map_data/cfg_ts")
+DEFAULT_CLEAN_DATA_DIR = Path(__file__).resolve().parents[1] / "clean_data"
+DEFAULT_THR_VIEW_ROOT = Path(__file__).resolve().parents[1] / "viewer" / "output"
+DEFAULT_CFG_MODEL_ROOT = Path(__file__).resolve().parents[1] / "models"
 
 
 # ============================================================
@@ -39,17 +39,17 @@ DEFAULT_CFG_MODEL_ROOT = Path("./map_data/cfg_ts")
 
 def _import_project_modules():
     try:
-        from thr_hung.hungarian import hungarian_binarize  # type: ignore
+        from core.matching import hungarian_binarize  # type: ignore
     except Exception as e:
         raise ImportError(
-            "Cannot import thr_hung.hungarian.hungarian_binarize. "
-            "Make sure the thr_hung package is available."
+            "Cannot import core.matching.hungarian_binarize. "
+            "Keep the core directory alongside viewer."
         ) from e
 
     try:
-        from cfg.cfg_ts import CfgEncoder  # type: ignore
+        from core.encoder import CfgEncoder  # type: ignore
     except Exception as e:
-        raise ImportError("Cannot import cfg.cfg_ts.CfgEncoder. Make sure cfg package is available.") from e
+        raise ImportError("Cannot import core.encoder.CfgEncoder. Keep the core directory alongside viewer.") from e
 
     return hungarian_binarize, CfgEncoder
 
@@ -494,7 +494,7 @@ def _rows_from_idx_range(info_df: pd.DataFrame, idx_range: Optional[Tuple[int, i
 
 
 def load_cfg_model(seq: str = "li-like", cfg_model_path: Optional[Union[str, Path]] = None):
-    from common.data_loader import load_cfg_model as _load_cfg_model
+    from core.data import load_cfg_model as _load_cfg_model
     return _load_cfg_model(seq=seq, cfg_model_path=cfg_model_path)
 
 
@@ -510,7 +510,7 @@ def load_pair_from_h5(
     cfg_model_path: Optional[Union[str, Path]] = None,
     thr_view_root: Union[str, Path] = DEFAULT_THR_VIEW_ROOT,
 ) -> Dict[str, Any]:
-    from common.data_loader import load_pair_from_h5 as _load_pair_from_h5
+    from core.data import load_pair_from_h5 as _load_pair_from_h5
 
     return _load_pair_from_h5(
         ion=ion,
@@ -528,28 +528,13 @@ def load_pair_from_h5(
 def compute_similarity_for_pair(
     pair_data: Dict[str, Any],
     *,
-    model_path: Optional[Union[str, Path]] = None,
-    edge_ablation: str = "xcos",
     xcos_keep: Optional[str] = None,
-    struct_beta: Union[int, float, str] = 0,
-    struct_candk: Union[int, str] = 100,
-    struct_topk: Union[int, str] = 1000,
-    struct_tol: Union[float, str] = 0.005,
-    struct_wav_mode: str = "log",
     device: Optional[str] = None,
     summarize: bool = True,
 ) -> Tuple[np.ndarray, Dict[str, Any]]:
     """Compute the xcos similarity matrix used by the published workflow."""
-    ab = str(edge_ablation).lower()
-    if ab != "xcos":
-        raise ValueError(
-            "This publication package supports edge_ablation='xcos' only. "
-            "GNN-based ablation modes are not part of the workflow described in the article."
-        )
+    from core.similarity import compute_xcos_similarity
 
-    from cos.xcos import compute_xcos_similarity
-
-    print(f"[TV] edge_ablation={edge_ablation}, xcos_keep={xcos_keep}")
     sim, _ = compute_xcos_similarity(
         pair_data,
         keep=xcos_keep,
@@ -569,26 +554,18 @@ def build_threshold_cube(
     db2: str,
     *,
     thresholds: Sequence[Union[int, float]],
-    model_path: Optional[Union[str, Path]] = None,
     clean_data_dir: Union[str, Path] = DEFAULT_CLEAN_DATA_DIR,
     thr_view_root: Union[str, Path] = DEFAULT_THR_VIEW_ROOT,
     seq: str = "li-like",
     cfg_model_path: Optional[Union[str, Path]] = None,
-    edge_ablation: str = "xcos",
     xcos_keep: Optional[str] = None,
-    struct_beta: Union[int, float, str] = 0,
-    struct_candk: Union[int, str] = 100,
-    struct_topk: Union[int, str] = 1000,
-    struct_tol: Union[float, str] = 0.005,
-    struct_wav_mode: str = "log",
     device: Optional[str] = None,
     summarize: bool = True,
     quiet: bool = True,
 ) -> Dict[str, Any]:
     """Load one pair and initialize lazy threshold-assignment caches.
 
-    The historical function name is retained for API compatibility. No dense
-    threshold-by-row-by-column H or M cubes are created.
+    Assignments are calculated when a threshold is selected.
     """
     with _suppress_known_noise(quiet), _quiet_stdio(quiet):
         pair_data = load_pair_from_h5(
@@ -603,14 +580,7 @@ def build_threshold_cube(
 
         sim, sim_summary = compute_similarity_for_pair(
             pair_data,
-            model_path=model_path,
-            edge_ablation=edge_ablation,
             xcos_keep=xcos_keep,
-            struct_beta=struct_beta,
-            struct_candk=struct_candk,
-            struct_topk=struct_topk,
-            struct_tol=struct_tol,
-            struct_wav_mode=struct_wav_mode,
             device=device,
             summarize=summarize,
         )
@@ -622,14 +592,7 @@ def build_threshold_cube(
     n_thr = len(thresholds_arr)
     pair_data.update(
         {
-            "model_path": None if model_path is None else Path(model_path),
-            "edge_ablation": edge_ablation,
             "xcos_keep": xcos_keep,
-            "struct_beta": struct_beta,
-            "struct_candk": struct_candk,
-            "struct_topk": struct_topk,
-            "struct_tol": struct_tol,
-            "struct_wav_mode": struct_wav_mode,
             "thresholds": thresholds_arr,
             "sim": sim,
             "sim_summary": sim_summary,
@@ -744,7 +707,7 @@ def _ensure_assignments(
 # ============================================================
 
 # Rule construction and selected-match evaluation are centralized in
-# thr_hung.rules and imported above.
+# core.matching and imported above.
 
 
 # ============================================================
@@ -1216,55 +1179,6 @@ def plot_threshold_slice(
 # ============================================================
 
 
-def save_threshold_pngs(
-    viewer_data: Dict[str, Any],
-    *,
-    modes: Sequence[str] = ("overlay",),
-    db1_range: Optional[Tuple[int, int]] = None,
-    db2_range: Optional[Tuple[int, int]] = None,
-    changed_mode: str = "off",
-    change_span: Optional[Tuple[int, int]] = None,
-    diff_highlight: str = "off",
-    rules: Optional[Dict[str, Any]] = None,
-    label_mode: str = "idx",
-    max_tick_labels: int = 30,
-    figsize: Tuple[float, float] = (10.0, 10.0),
-    dpi: int = 180,
-    save_dir: Optional[Union[str, Path]] = None,
-) -> Path:
-    thresholds = viewer_data["thresholds"]
-    base_dir = Path(save_dir) if save_dir is not None else viewer_data["out_dir"]
-    base_dir = _ensure_dir(base_dir)
-
-    suffix_bits = [str(changed_mode).lower(), str(diff_highlight).lower()]
-    if change_span is not None:
-        suffix_bits.append(f"change_{thresholds[int(change_span[0])]:.6f}_{thresholds[int(change_span[1])]:.6f}")
-    suffix = "__".join([x for x in suffix_bits if x and x != "off"])
-
-    for mode in modes:
-        mode_dir = _ensure_dir(base_dir / str(mode).lower())
-        if suffix:
-            mode_dir = _ensure_dir(mode_dir / suffix)
-        for k, thr in enumerate(thresholds):
-            fig, _, _ = plot_threshold_slice(
-                viewer_data,
-                thr_idx=k,
-                mode=mode,
-                db1_range=db1_range,
-                db2_range=db2_range,
-                changed_mode=changed_mode,
-                change_span=change_span,
-                diff_highlight=diff_highlight,
-                rules=rules,
-                label_mode=label_mode,
-                max_tick_labels=max_tick_labels,
-                figsize=figsize,
-            )
-            out_path = mode_dir / f"thr_{thr:.6f}.png"
-            fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
-            plt.close(fig)
-            print(f"[SAVE] {out_path}")
-    return base_dir
 
 
 def save_threshold_pdfs(
@@ -1689,6 +1603,7 @@ def launch_threshold_viewer(
     default_threshold: Optional[float] = 0.90,
     figsize: Tuple[float, float] = (10.0, 10.0),
     max_tick_labels: int = 30,
+    preset: Optional[Dict[str, Any]] = None,
 ):
     """Launch the lazy, Voila-compatible threshold viewer."""
     try:
@@ -1735,10 +1650,17 @@ def launch_threshold_viewer(
         idx_vals = idx_vals[: min(n_default, len(idx_vals))]
         return int(idx_vals.min()), int(idx_vals.max())
 
+    preset = preset or {}
+    default_threshold = preset.get("threshold", default_threshold)
+    default_label_mode = preset.get("labels", default_label_mode)
+    figsize = tuple(preset.get("figsize", figsize))
     db1_idx_min, db1_idx_max = _local_idx_bounds(info1)
     db2_idx_min, db2_idx_max = _local_idx_bounds(info2)
     db1_idx_default = _default_idx_window(info1, n_default=80)
     db2_idx_default = _default_idx_window(info2, n_default=80)
+
+    db1_idx_default = tuple(preset.get("db1_range") or db1_idx_default)
+    db2_idx_default = tuple(preset.get("db2_range") or db2_idx_default)
 
     if default_threshold is None:
         default_thr_idx = 0
@@ -1785,7 +1707,7 @@ def launch_threshold_viewer(
     )
     diff_dd = widgets.Dropdown(
         options=[("off", "off"), ("selected vs rules", "rules")],
-        value="off",
+        value=preset.get("diff", "off"),
         description="diff",
         layout=widgets.Layout(width="160px"),
     )
@@ -1823,9 +1745,9 @@ def launch_threshold_viewer(
     check_j = widgets.Checkbox(value=True, description="J", style=cb_style)
     check_parity = widgets.Checkbox(value=True, description="parity", style=cb_style)
     check_energy = widgets.Checkbox(value=True, description="energy", style=cb_style)
-    cfg_cos_thr = widgets.FloatText(value=0.8, description="cfg cos", layout=widgets.Layout(width="150px"))
-    energy_rel_thr = widgets.FloatText(value=0.05, description="E rel", layout=widgets.Layout(width="150px"))
-    energy_abs_thr = widgets.FloatText(value=3.0, description="E abs/eV", layout=widgets.Layout(width="150px"))
+    cfg_cos_thr = widgets.FloatText(value=preset.get("rules", {}).get("cfg_cos_thr", 0.8), description="cfg cos", layout=widgets.Layout(width="150px"))
+    energy_rel_thr = widgets.FloatText(value=preset.get("rules", {}).get("energy_rel_thr", 0.05), description="E rel", layout=widgets.Layout(width="150px"))
+    energy_abs_thr = widgets.FloatText(value=preset.get("rules", {}).get("energy_abs_thr", 3.0), description="E abs/eV", layout=widgets.Layout(width="150px"))
     energy_rule_mode = widgets.Dropdown(
         options=[
             ("rel only", "rel_only"),
@@ -1833,7 +1755,7 @@ def launch_threshold_viewer(
             ("rel OR abs", "rel_or_abs"),
             ("rel AND abs", "rel_and_abs"),
         ],
-        value="rel_or_abs",
+        value=preset.get("rules", {}).get("energy_rule_mode", "rel_or_abs"),
         description="E mode",
         layout=widgets.Layout(width="175px"),
     )
@@ -2469,18 +2391,11 @@ def quick_start_viewer(
     db2: str,
     *,
     thresholds: Sequence[Union[int, float]],
-    model_path: Optional[Union[str, Path]] = None,
     clean_data_dir: Union[str, Path] = DEFAULT_CLEAN_DATA_DIR,
     thr_view_root: Union[str, Path] = DEFAULT_THR_VIEW_ROOT,
     seq: str = "li-like",
     cfg_model_path: Optional[Union[str, Path]] = None,
-    edge_ablation: str = "xcos",
     xcos_keep: Optional[str] = None,
-    struct_beta: Union[int, float, str] = 0,
-    struct_candk: Union[int, str] = 100,
-    struct_topk: Union[int, str] = 1000,
-    struct_tol: Union[float, str] = 0.005,
-    struct_wav_mode: str = "log",
     summarize: bool = True,
     launch: bool = True,
     quiet: bool = True,
@@ -2491,18 +2406,11 @@ def quick_start_viewer(
         db1=db1,
         db2=db2,
         thresholds=thresholds,
-        model_path=model_path,
         clean_data_dir=clean_data_dir,
         thr_view_root=thr_view_root,
         seq=seq,
         cfg_model_path=cfg_model_path,
-        edge_ablation=edge_ablation,
         xcos_keep=xcos_keep,
-        struct_beta=struct_beta,
-        struct_candk=struct_candk,
-        struct_topk=struct_topk,
-        struct_tol=struct_tol,
-        struct_wav_mode=struct_wav_mode,
         summarize=summarize,
         quiet=quiet,
     )
